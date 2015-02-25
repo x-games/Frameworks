@@ -95,7 +95,10 @@
 <script type="text/javascript">
     'use strict';
 
-    var app = {}; //creating namespace
+    var app = {
+//        models : {},
+//        views : {}
+    }; //namespace
 
     //Model
     app.Shopping = Backbone.Model.extend({
@@ -111,25 +114,31 @@
     //Collection
     app.ShoppingList = Backbone.Collection.extend({
         model: app.Shopping,
-        localStorage: new Store("backbone-shoppingList"),
+        localStorage: new Backbone.LocalStorage("backbone-shoppingList"),
         completed: function() {
-            return this.filter(function( todo ) {
-                return todo.get('completed');
+            return this.filter(function( tobuy ) {
+                return tobuy.get('completed');
             });
         },
         remaining: function() {
             return this.without.apply( this, this.completed() );
         }
+//        todo comparator
     });
 
     app.shoppingList = new app.ShoppingList();
-
-
 
     //Views
     app.ShoppingView = Backbone.View.extend({
         tagName: 'li',
         template: _.template($('#item-template').html()),
+        events: {
+            'dblclick label' : 'edit',
+            'keypress .edit' : 'updateOnEnter',
+            'blur .edit' : 'close',
+            'click .toggle': 'toggleCompleted',
+            'click .destroy': 'destroy'
+        },
         render: function(){
             this.$el.html(this.template(this.model.toJSON()));
             this.input = this.$('.edit');
@@ -138,13 +147,6 @@
         initialize: function(){
             this.model.on('change', this.render, this);
             this.model.on('destroy', this.remove, this);
-        },
-        events: {
-            'dblclick label' : 'edit',
-            'keypress .edit' : 'updateOnEnter',
-            'blur .edit' : 'close',
-            'click .toggle': 'toggleCompleted',
-            'click .destroy': 'destroy'
         },
         edit: function(){
             this.$el.addClass('editing');
@@ -173,29 +175,40 @@
     //render full list of items
     app.AppView = Backbone.View.extend({
         el: '#shopping_app',
+        listElement : null,
+        input : null,
+        events: {
+            'keypress #new-shopping': 'createToBuyOnEnter'
+        },
         initialize: function () {
             this.input = this.$('#new-shopping');
+            this.listElement = this.$('#shopping-list');
+
             app.shoppingList.on('add', this.addAll, this);
             app.shoppingList.on('reset', this.addAll, this);
             app.shoppingList.fetch(); //load from localStorage
         },
-        events: {
-            'keypress #new-shopping': 'createToBuyOnEnter'
-        },
         createToBuyOnEnter: function(e){
-            if ( e.keyCode !== 13 || !this.input.val().trim() ) {
-                return;
+            var inputValue = this.input.val(),
+                stringNotEmpty = inputValue.trim().length > 0;
+
+            if ( e.keyCode == 13 && stringNotEmpty ) {
+
+                app.shoppingList.create({
+                    title : inputValue,
+                    completed : false
+                });
+
+                this.input.val('');
             }
-            app.shoppingList.create(this.newAttributes());
-            this.input.val('');
         },
         addOne: function(tobuy){
             var view = new app.ShoppingView({model: tobuy});
             $('#shopping-list').append(view.render().el);
         },
         addAll: function(){
-            console.log('render all =====================');
-            this.$('#shopping-list').html('');
+            console.log('render all ==================');
+            this.listElement.html('');
             switch (window.filter){
                 case 'pending':
                     _.each(app.shoppingList.remaining(), this.addOne);
@@ -207,13 +220,13 @@
                     app.shoppingList.each(this.addOne, this);
                     break;
             }
-        },
-        newAttributes: function(){
-            return {
-                title: this.input.val().trim(),
-                completed: false
-            }
         }
+//        newAttributes: function(title){
+//            return {
+//                title: this.input.val().trim(),
+//                completed: false
+//            }
+//        }
     });
 
     //Routes
